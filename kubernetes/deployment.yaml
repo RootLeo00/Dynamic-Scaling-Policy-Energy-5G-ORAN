@@ -1,0 +1,40 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: power-metrics-per-pod-app
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: power-metrics-per-pod-app
+  template:
+    metadata:
+      labels:
+        app: power-metrics-per-pod-app
+    spec:
+      containers:
+      - name: power-metrics-per-pod-app
+        image: rootleo00/power-metrics-per-pod:k8s
+        ports:
+        - containerPort: 5000
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: power-metrics-per-pod-app-service
+  labels:
+    app.kubernetes.io/name: power-metrics-per-pod-app-service
+  namespace: default
+  annotations:
+    prometheus.io/scheme: "http"
+    prometheus.io/scrape: "true"          # Tells Prometheus to scrape this service
+    prometheus.io/path: "/metrics"        # The metrics endpoint of your app
+    prometheus.io/port: "5000"            # Port on which metrics are exposed
+spec:
+  selector:
+    app: power-metrics-per-pod-app         # Matches the label in Deployment
+  ports:
+    - port: 5000
+      protocol: TCP
+      targetPort: 5000
+
