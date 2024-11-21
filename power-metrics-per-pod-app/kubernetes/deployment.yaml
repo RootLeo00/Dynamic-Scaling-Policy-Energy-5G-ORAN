@@ -15,6 +15,7 @@ spec:
       containers:
       - name: power-metrics-per-pod-app
         image: rootleo00/power-metrics-per-pod:k8s
+        imagePullPolicy: Always
         ports:
         - containerPort: 5000
 ---
