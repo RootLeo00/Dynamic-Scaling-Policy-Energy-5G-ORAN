@@ -174,3 +174,11 @@ cython_debug/
 */target/
 **/*.rs.bk
 *.pdb
+
+
+
+
+# analysys and plots
+power-metrics-per-pod-realtime/test_automation/*/data/*
+power-metrics-per-pod-realtime/test_automation/data/*
+
