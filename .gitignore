@@ -181,4 +181,4 @@ cython_debug/
 # analysys and plots
 power-metrics-per-pod-realtime/test_automation/*/data/*
 power-metrics-per-pod-realtime/test_automation/data/*
-
+power-metrics-per-pod-realtime/test_automation/exp*
