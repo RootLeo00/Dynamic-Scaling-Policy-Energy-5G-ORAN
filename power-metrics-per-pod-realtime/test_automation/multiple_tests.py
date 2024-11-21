@@ -13,8 +13,6 @@ print("Working directory:", WORK_DIR)
 
 # Prometheus server URL
 PROMETHEUS_URL = "http://192.168.122.115:32181"
-# Prometheus query to fetch the metric in watts if greater than 0.01
-QUERY = 'scaph_process_power_consumption_microwatts{container_scheduler="docker"} / 1000000 > 0.001'
 # SAVE_FILE_PATH_DATA = f"{WORK_DIR}/data/pc-time-containers.json"
 POD_DATA=f"{WORK_DIR}/data/all_pod_metrics.json"
 UID_POD_MAPPING_PATH=f"{WORK_DIR}/data/uid_pod_mapping.csv"
