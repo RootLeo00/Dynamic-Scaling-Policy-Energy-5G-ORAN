@@ -2,7 +2,7 @@ import os
 import subprocess
 import threading
 import time
-from utils import collect_metrics, load_uid_pod_map, plot_metrics, run_iperf, get_pod_info, get_all_pod_names, create_uid_pod_mapping,check_ping
+from utils import collect_metrics, load_uid_pod_map, plot_metrics, run_iperf, get_pod_info, get_all_pod_names, create_uid_pod_mapping,check_ping,download_tcpdump
 import logging
 
 logging.basicConfig(level=logging.INFO)
@@ -43,19 +43,21 @@ def wait_for_pods(namespace):
     run_command(["kubectl", "wait", "--for=condition=Ready", "--all","pods", "-n", namespace, "--timeout=180s"])
 
 # Helm uninstall and redeploy with updated resources
-def deploy_bp3(cpu_mi="500m",memory_mi='2Gi'):
+def deploy_bp3(cpu_mi="500m",memory_mi='2Gi', tcpdump=False):
     print(f"Redeploying pods with CPU resources set to {cpu_mi}m...")
 
     resource_set_flags = [
+        f"start.tcpdump={tcpdump}",
+        f"includeTcpDumpContainer={tcpdump}",
         f"resources.define=true",
         f"resources.limits.nf.cpu={cpu_mi}m",
         f"resources.limits.nf.memory={memory_mi}",
-        f"resources.limits.tcpdump.cpu={cpu_mi}m",
-        f"resources.limits.tcpdump.memory=128Mi",
+        # f"resources.limits.tcpdump.cpu={cpu_mi}m",
+        # f"resources.limits.tcpdump.memory=128Mi",
         f"resources.requests.nf.cpu={cpu_mi}m",
         f"resources.requests.nf.memory={memory_mi}",
-        f"resources.requests.tcpdump.cpu={cpu_mi}m",
-        f"resources.requests.tcpdump.memory=128Mi",
+        # f"resources.requests.tcpdump.cpu={cpu_mi}m",
+        # f"resources.requests.tcpdump.memory=128Mi",
     ]
     
     # Uninstall all Helm releases in core and ran namespaces
@@ -113,11 +115,12 @@ def uninstall_all_releases(namespace):
     except subprocess.CalledProcessError as e:
         print(f"Failed to uninstall releases in {namespace}: {e}")
 
-def run_experiments():
-    cpu_resources = [75,125,150,175,200]  # CPU in m
-    packet_lengths = [700, 1300]
-    mb_values = [40, 70]
-    duration = 60  # seconds
+def run_experiments(): 
+    cpu_resources = [500]  # CPU in m   # last value is not included in range!
+    packet_lengths = [700]
+    mb_values = [20,30,40,50,60,70]
+    duration = 100  # seconds
+    tcpdump=False
 
 
     for cpu in cpu_resources:
@@ -126,12 +129,13 @@ def run_experiments():
         oai_nr_ue_pod=""
         deployment_succeded=False
         while not deployment_succeded:
-            deploy_bp3(cpu)
+            deploy_bp3(cpu, tcpdump=tcpdump)
             install_iperf_on_upf()
 
             # Get real pod names
             oai_upf_pod, _ = get_pod_info("oai-upf")
             oai_nr_ue_pod, _ = get_pod_info("oai-nr-ue")
+            oai_cu,oai_cu_namespace=get_pod_info("oai-cu")
 
             deployment_succeded=check_ping(oai_nr_ue_pod, RAN_NAMESPACE, "12.1.1.100")
 
@@ -157,11 +161,7 @@ def run_experiments():
                     )
                     metrics_energy_thread = threading.Thread(
                         target=collect_metrics,
-                        args=(duration, SAVE_FILE_PATH_DATA_ENERGY, PROMETHEUS_URL, "energy")
-                    )
-                    metrics_cpu_thread = threading.Thread(
-                        target=collect_metrics,
-                        args=(duration, SAVE_FILE_PATH_DATA_CPU, PROMETHEUS_URL, "cpu")
+                        args=(duration, SAVE_FILE_PATH_DATA_ENERGY, PROMETHEUS_URL, "energy", None)
                     )
                     
 
@@ -169,16 +169,14 @@ def run_experiments():
                     iperf_thread_server.start()
                     iperf_thread_client.start()
                     metrics_energy_thread.start()
-                    metrics_cpu_thread.start()
-
-                    # Wait for the experiment duration
+                    # wait for 20s (for prometheus lag)
                     time.sleep(duration)
+                    collect_metrics(duration-20, SAVE_FILE_PATH_DATA_CPU, PROMETHEUS_URL, "cpu", oai_cu) # remove the 20 seconds of lag
 
                     # Wait for threads to finish
-                    iperf_thread_client.join()
-                    iperf_thread_server.join()
-                    metrics_energy_thread.join()
-                    metrics_cpu_thread.join()
+                    metrics_energy_thread.join() #blocking
+                    iperf_thread_client.join() #blocking
+                    iperf_thread_server.join() #blocking
 
                 except Exception as e:
                     print(f"Experiment failed: {e}")
@@ -187,6 +185,9 @@ def run_experiments():
                 get_all_pod_names(POD_DATA)
                 create_uid_pod_mapping(UID_POD_MAPPING_PATH, POD_DATA)
                 uid_pod_map = load_uid_pod_map(UID_POD_MAPPING_PATH)
+
+                if tcpdump:
+                    download_tcpdump(pod=oai_cu,namespace=oai_cu_namespace, download_to_dir=experiment_dir)
 
                 # Plot results for energy
                 plot_metrics(SAVE_FILE_PATH_DATA_ENERGY, SAVE_FILE_PATH_PLOT_ENERGY, uid_pod_map)

@@ -6,6 +6,7 @@ import time
 import subprocess
 import json
 import matplotlib.ticker as ticker
+import os
 
 def plot_metrics(file_path_data, save_file_path_plot, uid_pod_map, interval=2):
     """Reads metrics from the JSON file, downsamples to the specified interval, and plots them."""
@@ -237,7 +238,7 @@ def fetch_energy_metrics(prometheus_url, query):
             # Extract container_id and metric value
             container_id = entry['metric'].get('container_id', 'unknown')
             if container_id == "unknown":
-                print("Warning: Container ID is unknown for entry:", entry)
+                # print("Warning: Container ID is unknown for entry:", entry)
                 continue  # Skip entries with no valid container ID
             
             value = float(entry['value'][1])  # Metric value (e.g., power consumption)
@@ -265,7 +266,7 @@ def fetch_energy_metrics(prometheus_url, query):
         return {}
 
 
-def fetch_cpu_metrics(prometheus_url, query):
+def fetch_cpu_metrics(prometheus_url, query, pod_name):
     try:
         # Send the query to Prometheus
         response = requests.get(f"{prometheus_url}/api/v1/query", params={'query': query})
@@ -273,6 +274,7 @@ def fetch_cpu_metrics(prometheus_url, query):
         
         # Parse the JSON response
         result = response.json()
+        print("result",result)
         
         if result['status'] != 'success' or 'data' not in result:
             print(f"Unexpected response structure: {result}")
@@ -282,12 +284,6 @@ def fetch_cpu_metrics(prometheus_url, query):
         metrics_by_pod = {}
         
         for entry in result['data']['result']:
-
-            # Extract pod_name and metric value
-            pod_name = entry['metric'].get('pod', 'unknown')
-            if pod_name == "unknown":
-                print("Warning: Pod Name is unknown for entry:", entry)
-                continue  # Skip entries with no valid container ID
             
             value = float(entry['value'][1])  # Metric value (e.g., power consumption)
             timestamp = time.time()  # Current timestamp
@@ -312,39 +308,44 @@ def fetch_cpu_metrics(prometheus_url, query):
         return {}
 
 
-def collect_metrics(duration, save_file_path, prometheus_url, mode):
+def collect_metrics(duration, save_file_path, prometheus_url, mode, pod_name_cpu_metrics):
     start_time = time.time()
     metrics_over_time={}
     
     # Define the Prometheus queries basecd on mode
-    if mode=="energy":
+    if mode=="cpu":
+        # query = 'rate(container_cpu_usage_seconds_total{}[1m]) * 1000'
+        query = '100 * (sum(rate(container_cpu_usage_seconds_total{pod="'+pod_name_cpu_metrics+'"}['+str(round(duration))+'s])) by (pod)/ sum(kube_pod_container_resource_limits{pod="'+pod_name_cpu_metrics+'", resource="cpu"}) by (pod))'
+        print('query',query)
+        metrics = fetch_cpu_metrics(prometheus_url, query, pod_name_cpu_metrics)
+        print("metrics",metrics)
+        for id, data_points in metrics.items():
+            print("id, data_points",id, data_points)
+            if id not in metrics_over_time:
+                metrics_over_time[id] = []
+            metrics_over_time[id].extend(data_points)
+
+    elif mode == "energy":
         query = 'scaph_process_power_consumption_microwatts{container_scheduler="docker"} / 1000000 > 0.001'
-        fetch=fetch_energy_metrics
-    elif mode == "cpu":
-        #query = '100 * (sum(rate(container_cpu_usage_seconds_total{pod=~"oai-cu.*"}[15s])) by (pod) / sum(kube_pod_container_resource_limits{pod=~"oai-cu.*", resource="cpu"}) by (pod))'
-        query = 'rate(container_cpu_usage_seconds_total{}[1m]) * 1000'
-        fetch=fetch_cpu_metrics
+        while time.time() - start_time < duration:
+            try:
+                # Fetch both power consumption metrics
+                metrics = fetch_energy_metrics(prometheus_url, query)
+                
+                # Extract CPU usage values
+                for id, data_points in metrics.items():
+                    if id not in metrics_over_time:
+                        metrics_over_time[id] = []
+                    metrics_over_time[id].extend(data_points)
+
+                time.sleep(1)  # Adjust polling interval as needed
+
+            except Exception as e:
+                print(f"Error collecting metrics: {e}")
+                time.sleep(5)  # Retry after some delay if error occurs
     else: 
         print(f"Error collecting metrics due to invalid mode: {mode}")
         return None
-
-
-    while time.time() - start_time < duration:
-        try:
-            # Fetch both power consumption and CPU usage metrics in parallel
-            metrics = fetch(prometheus_url, query)
-            
-            # Extract CPU usage values
-            for id, data_points in metrics.items():
-                if id not in metrics_over_time:
-                    metrics_over_time[id] = []
-                metrics_over_time[id].extend(data_points)
-
-            time.sleep(1)  # Adjust polling interval as needed
-
-        except Exception as e:
-            print(f"Error collecting metrics: {e}")
-            time.sleep(5)  # Retry after some delay if error occurs
 
     # Save collected metrics to a file
     with open(save_file_path, "w") as f:
@@ -391,3 +392,46 @@ def check_ping(pod_name, namespace, target_ip, max_retries=4):
 
     print(f"ERROR: Ping test failed after {max_retries} attempts.")
     return False  # Ping failed after retries
+
+
+
+
+def download_tcpdump(pod,namespace, download_to_dir="pcap_files"):
+    """
+    Downloads all files from /tmp/pcap/ in the 'tcpdump' container
+    of the specified pod pod.
+    
+    Args:
+        pod (str): Name of the pod pod.
+        download_to_dir (str): Local directory to save the downloaded files. Default is 'pcap_files'.
+
+    Returns:
+        str: Path to the directory where the files are saved.
+    """
+    # Ensure the local directory exists
+    os.makedirs(download_to_dir, exist_ok=True)
+
+    # Define the source path in the pod's container
+    remote_path = "/tmp/pcap/"
+    container_name = "tcpdump"  # Specify the container name in the pod pod
+    
+    try:
+        # Run kubectl cp command to copy files
+        command = [
+            "kubectl", "cp",
+            f"{pod}:{remote_path}",  # Pod and path in the container
+            download_to_dir,  # Local destination directory
+            "-c", container_name,  # Specify the container within the pod
+            "-n", namespace # namespace of the pod
+        ]
+        print(f"Running command: {' '.join(command)}")
+        subprocess.run(command, check=True)
+        print(f"Files successfully downloaded to: {download_to_dir}")
+        
+        return os.path.abspath(download_to_dir)
+    
+    except subprocess.CalledProcessError as e:
+        print(f"Error during file download: {e}")
+        raise RuntimeError(f"Failed to download files from {pod}:{remote_path}")
+
+
