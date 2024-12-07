@@ -14,8 +14,6 @@ print("Working directory:", WORK_DIR)
 # Prometheus server URL
 PROMETHEUS_URL = "http://192.168.122.115:32181"
 # SAVE_FILE_PATH_DATA = f"{WORK_DIR}/data/pc-time-containers.json"
-POD_DATA=f"{WORK_DIR}/data/all_pod_metrics.json"
-UID_POD_MAPPING_PATH=f"{WORK_DIR}/data/uid_pod_mapping.csv"
 
 
 # Constants for Helm chart paths
@@ -43,23 +41,9 @@ def wait_for_pods(namespace):
     run_command(["kubectl", "wait", "--for=condition=Ready", "--all","pods", "-n", namespace, "--timeout=180s"])
 
 # Helm uninstall and redeploy with updated resources
-def deploy_bp3(cpu_mi="500m",memory_mi='2Gi', tcpdump=False):
+def deploy_bp3(cpu_mi=None,memory_mi='2Gi', tcpdump=False):
     print(f"Redeploying pods with CPU resources set to {cpu_mi}m...")
 
-    resource_set_flags = [
-        f"start.tcpdump={tcpdump}",
-        f"includeTcpDumpContainer={tcpdump}",
-        f"resources.define=true",
-        f"resources.limits.nf.cpu={cpu_mi}m",
-        f"resources.limits.nf.memory={memory_mi}",
-        # f"resources.limits.tcpdump.cpu={cpu_mi}m",
-        # f"resources.limits.tcpdump.memory=128Mi",
-        f"resources.requests.nf.cpu={cpu_mi}m",
-        f"resources.requests.nf.memory={memory_mi}",
-        # f"resources.requests.tcpdump.cpu={cpu_mi}m",
-        # f"resources.requests.tcpdump.memory=128Mi",
-    ]
-    
     # Uninstall all Helm releases in core and ran namespaces
     uninstall_all_releases("core")
     uninstall_all_releases("ran")
@@ -71,7 +55,23 @@ def deploy_bp3(cpu_mi="500m",memory_mi='2Gi', tcpdump=False):
     run_command(["helm", "install", "oai-flexric", FLEXRIC_CHART_PATH, "-n", CORE_NAMESPACE])
     wait_for_pods(CORE_NAMESPACE)
 
-    run_command(["helm", "install", "oai-cu", CU_CHART_PATH, "-n", RAN_NAMESPACE, "--set", ",".join(resource_set_flags)])
+    if cpu_mi:
+        resource_set_flags = [
+            f"start.tcpdump={tcpdump}",
+            f"includeTcpDumpContainer={tcpdump}",
+            f"resources.define=true",
+            f"resources.limits.nf.cpu={cpu_mi}m",
+            f"resources.limits.nf.memory={memory_mi}",
+            # f"resources.limits.tcpdump.cpu={cpu_mi}m",
+            # f"resources.limits.tcpdump.memory=128Mi",
+            f"resources.requests.nf.cpu={cpu_mi}m",
+            f"resources.requests.nf.memory={memory_mi}",
+            # f"resources.requests.tcpdump.cpu={cpu_mi}m",
+            # f"resources.requests.tcpdump.memory=128Mi",
+        ]
+        run_command(["helm", "install", "oai-cu", CU_CHART_PATH, "-n", RAN_NAMESPACE, "--set", ",".join(resource_set_flags)])
+    else:
+        run_command(["helm", "install", "oai-cu", CU_CHART_PATH, "-n", RAN_NAMESPACE])
     run_command(["helm", "install", "oai-du", DU_CHART_PATH, "-n", RAN_NAMESPACE])
     wait_for_pods(RAN_NAMESPACE)
     time.sleep(5)
@@ -115,13 +115,12 @@ def uninstall_all_releases(namespace):
     except subprocess.CalledProcessError as e:
         print(f"Failed to uninstall releases in {namespace}: {e}")
 
-def run_experiments(): 
-    cpu_resources = [500]  # CPU in m   # last value is not included in range!
+def run_experiments(index): 
+    cpu_resources = [25,50,75,100,125,150,175,200,500,1000,2000]  # CPU in m   # last value is not included in range!
     packet_lengths = [700]
-    mb_values = [20,30,40,50,60,70]
+    mb_values = [10,20,30,40,50,60,70] 
     duration = 100  # seconds
     tcpdump=False
-
 
     for cpu in cpu_resources:
         print("\n------------------------------NEW EXPERIMENT------------------------------")
@@ -129,7 +128,7 @@ def run_experiments():
         oai_nr_ue_pod=""
         deployment_succeded=False
         while not deployment_succeded:
-            deploy_bp3(cpu, tcpdump=tcpdump)
+            deploy_bp3(cpu_mi=cpu, tcpdump=tcpdump)
             install_iperf_on_upf()
 
             # Get real pod names
@@ -142,14 +141,27 @@ def run_experiments():
         for packet_length in packet_lengths:
             for mb in mb_values:
                 description = f"{cpu}mi_at_cu"
-                experiment_dir = f"data/{mb}_{duration}_{packet_length}_{description}"
+                experiment_dir = f"experiment{index}/{mb}_{duration}_{packet_length}_{description}"
+
+                # Check if the directory exists
+                if os.path.exists(experiment_dir):
+                    # Delete all files and subdirectories inside the folder (without deleting the folder itself)
+                    for filename in os.listdir(experiment_dir):
+                        file_path = os.path.join(experiment_dir, filename)
+                        try:
+                            os.remove(file_path)  # Remove file
+                        except Exception as e:
+                            print(f"Failed to delete {file_path}. Reason: {e}")
                 os.makedirs(experiment_dir, exist_ok=True)
 
                 # Run experiment
                 try:
                     SAVE_FILE_PATH_DATA_ENERGY = os.path.join(experiment_dir, "metrics_energy.json")
+                    SAVE_FILE_PATH_DATA_HOST_ENERGY = os.path.join(experiment_dir, "metrics_host_energy.json")
                     SAVE_FILE_PATH_PLOT_ENERGY = os.path.join(experiment_dir, "metrics_energy.png")
                     SAVE_FILE_PATH_DATA_CPU = os.path.join(experiment_dir, "metrics_cpu.json")
+                    UID_POD_MAPPING_PATH=os.path.join(experiment_dir, "uid_pod_mapping.csv")
+                    POD_DATA=os.path.join(experiment_dir, "all_pod_metrics.json")
                     
                     iperf_thread_server = threading.Thread(
                         target=run_iperf,
@@ -163,18 +175,23 @@ def run_experiments():
                         target=collect_metrics,
                         args=(duration, SAVE_FILE_PATH_DATA_ENERGY, PROMETHEUS_URL, "energy", None)
                     )
-                    
+                    metrics_host_energy_thread = threading.Thread(
+                        target=collect_metrics,
+                        args=(duration, SAVE_FILE_PATH_DATA_HOST_ENERGY, PROMETHEUS_URL, "host_energy", None)
+                    )
 
                     # Start threads
                     iperf_thread_server.start()
                     iperf_thread_client.start()
                     metrics_energy_thread.start()
+                    metrics_host_energy_thread.start()
                     # wait for 20s (for prometheus lag)
                     time.sleep(duration)
                     collect_metrics(duration-20, SAVE_FILE_PATH_DATA_CPU, PROMETHEUS_URL, "cpu", oai_cu) # remove the 20 seconds of lag
 
                     # Wait for threads to finish
                     metrics_energy_thread.join() #blocking
+                    metrics_host_energy_thread.join() #blocking
                     iperf_thread_client.join() #blocking
                     iperf_thread_server.join() #blocking
 
@@ -195,8 +212,9 @@ def run_experiments():
     return True
 
 if __name__ == "__main__":
-    finished=False
-    while not finished:
-        finished=run_experiments()
+    for i in range(10,20):
+        finished=False
+        while not finished:
+            finished=run_experiments(index=i)
 
     print("All the experiments are done. Hurray.")
