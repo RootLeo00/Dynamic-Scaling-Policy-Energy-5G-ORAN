@@ -8,7 +8,7 @@ import json
 import matplotlib.ticker as ticker
 import os
 
-def plot_metrics(file_path_data, save_file_path_plot, uid_pod_map, interval=2):
+def plot_metrics(file_path_data, save_file_path_plot, uid_pod_map, interval=1):
     """Reads metrics from the JSON file, downsamples to the specified interval, and plots them."""
     # Load data from JSON file
     try:
@@ -207,6 +207,51 @@ def load_uid_pod_map(csv_file_path):
         print(f"{csv_file_path} not found.")
         return {}
     
+def fetch_host_energy_metrics(prometheus_url, query):
+    try:
+        # Send the query to Prometheus
+        response = requests.get(f"{prometheus_url}/api/v1/query", params={'query': query})
+        response.raise_for_status()  # Raise an exception for HTTP errors
+        
+        # Parse the JSON response
+        result = response.json()
+        
+        if result['status'] != 'success' or 'data' not in result:
+            print(f"Unexpected response structure: {result}")
+            return {}
+
+        # Initialize the metrics dictionary
+        metrics_by_node = {}
+        
+        for entry in result['data']['result']:
+            # Extract node_name and metric value
+            node_name = entry['metric'].get('node', 'unknown')
+            if node_name == "unknown":
+                # print("Warning: Container ID is unknown for entry:", entry)
+                continue  # Skip entries with no valid container ID
+            
+            value = float(entry['value'][1])  # Metric value (e.g., power consumption)
+            timestamp = time.time()  # Current timestamp
+            
+            # Initialize the container ID entry if it doesn't exist
+            if node_name not in metrics_by_node:
+                metrics_by_node[node_name] = []
+            
+            # Append the metric entry
+            metrics_by_node[node_name].append({
+                'timestamp': timestamp,
+                'value': value,
+            })
+
+        return metrics_by_node
+    
+    except requests.exceptions.RequestException as e:
+        print(f"Error fetching metrics from Prometheus: {e}")
+        return {}
+    except (ValueError, KeyError) as e:
+        print(f"Error parsing Prometheus response: {e}")
+        return {}
+
 
 def fetch_energy_metrics(prometheus_url, query):
     """
@@ -326,11 +371,30 @@ def collect_metrics(duration, save_file_path, prometheus_url, mode, pod_name_cpu
             metrics_over_time[id].extend(data_points)
 
     elif mode == "energy":
-        query = 'scaph_process_power_consumption_microwatts{container_scheduler="docker"} / 1000000 > 0.001'
+        query = 'sum(scaph_process_power_consumption_microwatts{container_scheduler="docker"} / 1000000) by (container_id)'
         while time.time() - start_time < duration:
             try:
                 # Fetch both power consumption metrics
                 metrics = fetch_energy_metrics(prometheus_url, query)
+                
+                # Extract CPU usage values
+                for id, data_points in metrics.items():
+                    if id not in metrics_over_time:
+                        metrics_over_time[id] = []
+                    metrics_over_time[id].extend(data_points)
+
+                time.sleep(1)  # Adjust polling interval as needed
+
+            except Exception as e:
+                print(f"Error collecting metrics: {e}")
+                time.sleep(5)  # Retry after some delay if error occurs
+
+    elif mode == "host_energy":
+        query = 'scaph_host_power_microwatts / 1000000 > 0.001'
+        while time.time() - start_time < duration:
+            try:
+                # Fetch both power consumption metrics
+                metrics = fetch_host_energy_metrics(prometheus_url, query)
                 
                 # Extract CPU usage values
                 for id, data_points in metrics.items():
