@@ -120,32 +120,32 @@ def uninstall_all_releases(namespace):
         print(f"Failed to uninstall releases in {namespace}: {e}")
 # Updated experiment function to handle multiple UEs
 def run_experiments_with_multiple_ues(index):
-    packet_lengths = [300]
-    ue1_mb_values = [40,40,50,50]  # Mbps for UE1
-    ue2_mb_values = [30,40,40,50]  # Mbps for UE2
+    packet_lengths = [500]#[300,400,500,700,1000]
+    ue1_mb_values = [5,10,20,20,30,30,40,40,50,50]  # Mbps for UE1
+    ue2_mb_values = [5,10,10,20,20,30,30,40,40,50]  # Mbps for UE2
     duration = 100  # seconds
     duration_baseline = 100
     tcpdump = False
 
-    print("\n------------------------------NEW EXPERIMENT------------------------------")
-    deployment_succeeded = False
-    while not deployment_succeeded:
-        deploy_bp3_with_second_du_and_ue(tcpdump=tcpdump)
-        install_iperf_on_upf()
-
-        # Get real pod names
-        oai_nr_ue1_pod, _ = get_pod_info("oai-nr-ue")
-        oai_nr_ue2_pod, _ = get_pod_info("oai-nr-ue2")
-        oai_upf_pod, _ = get_pod_info("oai-upf")
-        deployment_succeeded = (
-            check_ping(oai_nr_ue1_pod, RAN_NAMESPACE, "12.1.1.100") and
-            check_ping(oai_nr_ue2_pod, RAN_NAMESPACE, "12.1.1.101")
-        )
-
     for packet_length in packet_lengths:
         for ue1_mb, ue2_mb in zip(ue1_mb_values, ue2_mb_values):
+            print("\n------------------------------NEW EXPERIMENT------------------------------")
+            deployment_succeeded = False
+            while not deployment_succeeded:
+                deploy_bp3_with_second_du_and_ue(tcpdump=tcpdump)
+                install_iperf_on_upf()
+
+                # Get real pod names
+                oai_nr_ue1_pod, _ = get_pod_info("oai-nr-ue")
+                oai_nr_ue2_pod, _ = get_pod_info("oai-nr-ue2")
+                oai_upf_pod, _ = get_pod_info("oai-upf")
+                deployment_succeeded = (
+                    check_ping(oai_nr_ue1_pod, RAN_NAMESPACE, "12.1.1.100") and
+                    check_ping(oai_nr_ue2_pod, RAN_NAMESPACE, "12.1.1.101")
+                )
+
             total_mb = ue1_mb + ue2_mb
-            experiment_dir = f"experiment_packet_energy_2UE_{index}/{total_mb}_{duration}_{packet_length}"
+            experiment_dir = f"experiment_packet_energy_2UE_1CU_{index}/{total_mb}_{duration}_{packet_length}"
 
             # Ensure the experiment directory is clean
             if os.path.exists(experiment_dir):
@@ -218,7 +218,7 @@ def run_experiments_with_multiple_ues(index):
     return True
 
 if __name__ == "__main__":
-    for i in range(41, 42):
+    for i in range(0, 1):
         finished = False
         while not finished:
             finished = run_experiments_with_multiple_ues(index=i)
