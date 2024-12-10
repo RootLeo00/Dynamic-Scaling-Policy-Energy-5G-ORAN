@@ -115,30 +115,34 @@ def uninstall_all_releases(namespace):
     except subprocess.CalledProcessError as e:
         print(f"Failed to uninstall releases in {namespace}: {e}")
 
+
 def run_experiments(index): 
-    packet_lengths = [300]
-    mb_values = [10,20,30,40,50,60] 
-    duration = 100  # seconds
-    duration_baseline=100
-    tcpdump=False
+    # Experiment parameters
+    packet_lengths = [300, 500, 700]  # Packet lengths
+    mb_values = [30,60,20,10,5,15,12]   # Mbps
+    durations = [40,20,60,120,240,80,100]     # Durations
+    duration_baseline = 100
+    tcpdump = False
 
     print("\n------------------------------NEW EXPERIMENT------------------------------")
-    oai_upf_pod=""
-    oai_nr_ue_pod=""
-    deployment_succeded=False
-    while not deployment_succeded:
-        deploy_bp3( tcpdump=tcpdump)
+    oai_upf_pod = ""
+    oai_nr_ue_pod = ""
+    deployment_succeeded = False
+
+    while not deployment_succeeded:
+        deploy_bp3(tcpdump=tcpdump)
         install_iperf_on_upf()
 
         # Get real pod names
         oai_upf_pod, _ = get_pod_info("oai-upf")
         oai_nr_ue_pod, _ = get_pod_info("oai-nr-ue")
-        oai_cu,oai_cu_namespace=get_pod_info("oai-cu")
+        oai_cu, oai_cu_namespace = get_pod_info("oai-cu")
 
-        deployment_succeded=check_ping(oai_nr_ue_pod, RAN_NAMESPACE, "12.1.1.100")
+        deployment_succeeded = check_ping(oai_nr_ue_pod, RAN_NAMESPACE, "12.1.1.100")
 
+    # Iterate over all combinations of parameters
     for packet_length in packet_lengths:
-        for mb in mb_values:
+        for i, (mb, duration) in enumerate(zip(mb_values, durations)):
             experiment_dir = f"experiment_packet_energy_{index}/{mb}_{duration}_{packet_length}"
 
             # Check if the directory exists
@@ -158,8 +162,8 @@ def run_experiments(index):
                 SAVE_FILE_PATH_DATA_HOST_ENERGY = os.path.join(experiment_dir, "metrics_host_energy.json")
                 SAVE_FILE_PATH_PLOT_ENERGY = os.path.join(experiment_dir, "metrics_energy.png")
                 SAVE_FILE_PATH_DATA_CPU = os.path.join(experiment_dir, "metrics_cpu.json")
-                UID_POD_MAPPING_PATH=os.path.join(experiment_dir, "uid_pod_mapping.csv")
-                POD_DATA=os.path.join(experiment_dir, "all_pod_metrics.json")
+                UID_POD_MAPPING_PATH = os.path.join(experiment_dir, "uid_pod_mapping.csv")
+                POD_DATA = os.path.join(experiment_dir, "all_pod_metrics.json")
                 
                 iperf_thread_server = threading.Thread(
                     target=run_iperf,
@@ -171,31 +175,31 @@ def run_experiments(index):
                 )
                 metrics_energy_thread = threading.Thread(
                     target=collect_metrics,
-                    args=(duration_baseline+duration, SAVE_FILE_PATH_DATA_ENERGY, PROMETHEUS_URL, "energy", None)
+                    args=(duration_baseline + duration, SAVE_FILE_PATH_DATA_ENERGY, PROMETHEUS_URL, "energy", None)
                 )
-                metrics_host_energy_thread = threading.Thread(
-                    target=collect_metrics,
-                    args=(duration_baseline+duration, SAVE_FILE_PATH_DATA_HOST_ENERGY, PROMETHEUS_URL, "host_energy", None)
-                )
+                # metrics_host_energy_thread = threading.Thread(
+                #     target=collect_metrics,
+                #     args=(duration_baseline + duration, SAVE_FILE_PATH_DATA_HOST_ENERGY, PROMETHEUS_URL, "host_energy", None)
+                # )
 
                 metrics_energy_thread.start()
-                metrics_host_energy_thread.start()
+                # metrics_host_energy_thread.start()
 
-                # wait to get baseline energy
+                # Wait to get baseline energy
                 time.sleep(duration_baseline)
 
                 # Start threads
                 iperf_thread_server.start()
                 iperf_thread_client.start()
-                # wait for 20s (for prometheus lag)
-                time.sleep(duration)
-                collect_metrics(duration-20, SAVE_FILE_PATH_DATA_CPU, PROMETHEUS_URL, "cpu", oai_cu) # remove the 20 seconds of lag
+                # # Wait for 20s (for Prometheus lag)
+                # time.sleep(duration)
+                # collect_metrics(duration - 20, SAVE_FILE_PATH_DATA_CPU, PROMETHEUS_URL, "cpu", oai_cu)  # Remove the 20 seconds of lag
 
                 # Wait for threads to finish
-                metrics_energy_thread.join() #blocking
-                metrics_host_energy_thread.join() #blocking
-                iperf_thread_client.join() #blocking
-                iperf_thread_server.join() #blocking
+                metrics_energy_thread.join()  # blocking
+                # metrics_host_energy_thread.join()  # blocking
+                iperf_thread_client.join()  # blocking
+                iperf_thread_server.join()  # blocking
 
             except Exception as e:
                 print(f"Experiment failed: {e}")
@@ -206,7 +210,7 @@ def run_experiments(index):
             uid_pod_map = load_uid_pod_map(UID_POD_MAPPING_PATH)
 
             if tcpdump:
-                download_tcpdump(pod=oai_cu,namespace=oai_cu_namespace, download_to_dir=experiment_dir)
+                download_tcpdump(pod=oai_cu, namespace=oai_cu_namespace, download_to_dir=experiment_dir)
 
             # Plot results for energy
             plot_metrics(SAVE_FILE_PATH_DATA_ENERGY, SAVE_FILE_PATH_PLOT_ENERGY, uid_pod_map)
@@ -214,9 +218,9 @@ def run_experiments(index):
     return True
 
 if __name__ == "__main__":
-    for i in range(25,30):
-        finished=False
+    for i in range(43, 44):
+        finished = False
         while not finished:
-            finished=run_experiments(index=i)
+            finished = run_experiments(index=i)
 
     print("All the experiments are done. Hurray.")
