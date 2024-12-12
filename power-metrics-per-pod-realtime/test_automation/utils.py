@@ -217,6 +217,59 @@ def run_iperf_tcp(pod_name, namespace, mode, log_dir,duration=None,ip_address=No
 
 
 
+def run_iperf_tcp_number_packets(pod_name, namespace, mode, log_dir,duration=None,ip_address=None, mb=None, packet_length=None):
+    """
+    -n, --num n[KM] 	The number of buffers to transmit. Normally, iPerf sends for 10 seconds. The -n option overrides this and sends an array of len bytes num times, no matter how long that takes. See also the -l, -k and -t options.
+    """
+   
+    # Set up log file path and header
+    mode_suffix = 'client' if mode == 'client' else 'server'
+    log_file = f"{log_dir}/log_iperf_{mode_suffix}_{pod_name}"
+    if ip_address and mb:
+        log_file += f"_{ip_address}_{mb}_{duration}_{packet_length}"
+    log_file += ".csv"
+
+    header = "Timestamp,Source_IP,Source_Port,Destination_IP,Destination_Port,Protocol,Interval,Transfer,Bitrate,Jitter,Lost_Packets,Lost_Packets_Percent,Unknown1,Unknown2"
+    
+    # Write the header to the log file
+    with open(log_file, 'w') as f:
+        f.write(header + '\n')
+
+    try:
+        # Construct the iperf command
+        if mode == 'client':
+            if not all([ip_address, mb, duration, packet_length]):
+                raise ValueError("Client mode requires ip_address, value, duration, and packet_length parameters.")
+
+            iperf_command = [
+                'kubectl', 'exec', pod_name, '-n', namespace,
+                '--', 'iperf', '-c', ip_address, '-i', '1',
+                '-n', f"{mb}M", '-l', str(packet_length), '--reportstyle', 'C'
+            ]
+        elif mode == 'server':
+            iperf_command = [
+                'kubectl', 'exec', pod_name, '-n', namespace,
+                '--', 'iperf', '-s', '-i', '1', '--reportstyle', 'C'
+            ]
+        else:
+            raise ValueError("Mode must be either 'client' or 'server'.")
+
+        # Print the command for debugging
+        print("Running command:", iperf_command)
+
+        # Open the log file in append mode
+        with open(log_file, 'a') as f:
+            # Run the iperf command, redirecting stderr to /dev/null
+            subprocess.run(iperf_command, stdout=f, stderr=subprocess.DEVNULL, check=True)
+        
+        print(f"Log file saved to: {log_file}")
+
+    except subprocess.CalledProcessError as e:
+        print(f"Error executing iperf: {e}")
+    except Exception as e:
+        print(f"An unexpected error occurred: {e}")
+
+
 
 def create_uid_pod_mapping(save_file_path, pod_list_path):
     # Load pod data from JSON file

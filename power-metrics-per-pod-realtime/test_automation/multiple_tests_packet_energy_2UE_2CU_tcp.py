@@ -77,6 +77,8 @@ def deploy_bp3_with_second_du_and_ue(cpu_mi=None, memory_mi='2Gi', tcpdump=False
     wait_for_pods(RAN_NAMESPACE)
 
     # Install the second DU and UE
+    run_command(["helm", "install", "oai-cu2", CU_CHART_PATH, "-n", RAN_NAMESPACE])
+    wait_for_pods(RAN_NAMESPACE)
     run_command(["helm", "install", "oai-du2", DU2_CHART_PATH, "-n", RAN_NAMESPACE])
     wait_for_pods(RAN_NAMESPACE)
     run_command(["helm", "install", "oai-nr-ue2", UE2_CHART_PATH, "-n", RAN_NAMESPACE,])
