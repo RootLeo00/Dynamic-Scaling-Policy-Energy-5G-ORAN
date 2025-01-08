@@ -182,3 +182,4 @@ cython_debug/
 power-metrics-per-pod-realtime/test_automation/*/data/*
 power-metrics-per-pod-realtime/test_automation/data/*
 power-metrics-per-pod-realtime/test_automation/exp*
+power-metrics-per-pod-realtime/data/*
