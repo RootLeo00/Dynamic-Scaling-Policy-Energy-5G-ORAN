@@ -4,7 +4,6 @@ import subprocess
 import sys
 import threading
 import time
-from utils import collect_metrics_with_stop_event, load_uid_pod_map, plot_metrics, run_iperf_tcp_number_packets, get_pod_info, get_all_pod_names, create_uid_pod_mapping,check_ping,download_tcpdump
 import logging
 from threading import Event
 
