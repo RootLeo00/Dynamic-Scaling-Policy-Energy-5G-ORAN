@@ -220,8 +220,8 @@ def run_iperf_tcp_number_packets(pod_name, namespace, mode, log_dir, ip_address=
     # Set up log file path and header
     mode_suffix = 'client' if mode == 'client' else 'server'
     log_file = f"{log_dir}/log_iperf_{mode_suffix}_{pod_name}"
-    if ip_address and mb:
-        log_file += f"_{ip_address}_{mb}_{duration}_{packet_length}"
+    if ip_address and mb and packet_length:
+        log_file += f"_{ip_address}_{mb}_{packet_length}"
     log_file += ".csv"
 
     header = "Timestamp,Source_IP,Source_Port,Destination_IP,Destination_Port,Protocol,Interval,Transfer,Bitrate,Jitter,Lost_Packets,Lost_Packets_Percent,Unknown1,Unknown2"
@@ -233,8 +233,8 @@ def run_iperf_tcp_number_packets(pod_name, namespace, mode, log_dir, ip_address=
     try:
         # Construct the iperf command
         if mode == 'client':
-            if not all([ip_address, mb, duration, packet_length]):
-                raise ValueError("Client mode requires ip_address, value, duration, and packet_length parameters.")
+            if not all([ip_address, mb, packet_length]):
+                raise ValueError("Client mode requires ip_address, mb, and packet_length parameters.")
 
             iperf_command = [
                 'kubectl', 'exec', pod_name, '-n', namespace,
