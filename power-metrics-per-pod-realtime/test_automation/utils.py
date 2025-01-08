@@ -244,7 +244,7 @@ def run_iperf_tcp_number_packets(pod_name, namespace, mode, log_dir, ip_address=
         elif mode == 'server':
             iperf_command = [
                 'kubectl', 'exec', pod_name, '-n', namespace,
-                '--', 'iperf', '-s', '-i', '1', '--reportstyle', 'C'
+                '--', 'iperf', '-s', '-i', '1','-P','1', '--reportstyle', 'C'
             ]
         else:
             raise ValueError("Mode must be either 'client' or 'server'.")
@@ -255,15 +255,20 @@ def run_iperf_tcp_number_packets(pod_name, namespace, mode, log_dir, ip_address=
         # Open the log file in append mode
         with open(log_file, 'a') as f:
             # Run the iperf command, redirecting stderr to /dev/null
-            subprocess.run(iperf_command, stdout=f, stderr=subprocess.DEVNULL, check=True)
-        
+            subprocess.run(iperf_command, stdout=f, stderr=f, check=True, timeout=100000)
+
         print(f"Log file saved to: {log_file}")
 
     except subprocess.CalledProcessError as e:
         print(f"Error executing iperf: {e}")
+        with open(f"{log_dir}/log_iperf_{mode_suffix}_{pod_name}_ERROR.txt", 'w') as f:
+            f.write(f'\n ERROR subprocess.CalledProcessError: \n {e}\n')
+            f.close()
     except Exception as e:
         print(f"An unexpected error occurred: {e}")
-
+        with open(f"{log_dir}/log_iperf_{mode_suffix}_{pod_name}_ERROR.txt", 'w') as f:
+            f.write(f'\n ERROR subprocess.CalledProcessError: \n {e}\n')
+            f.close()
 
 
 def create_uid_pod_mapping(save_file_path, pod_list_path):
