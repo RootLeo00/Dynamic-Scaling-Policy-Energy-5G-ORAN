@@ -17,24 +17,24 @@ spec:
         {{- include "labels.common" . | nindent 8 }}
     spec:
       containers:
-      - name:  {{ template "scaphandre.name" . }}
+      - name: {{ template "scaphandre.name" . }}
         image: "{{ .Values.image.name }}:{{ .Values.image.tag }}"
         args:
-            {{- range $key, $value := .Values.scaphandre.args }}
-            {{- if $value }}
-            - --{{ $key }}={{ $value }}
-            {{- else }}
-            - --{{ $key }}
-            {{- end }}
-            {{- end }}
-            - {{ .Values.scaphandre.command }}
-            {{- range $key, $value := .Values.scaphandre.extraArgs }}
-            {{- if $value }}
-            - --{{ $key }}={{ $value }}
-            {{- else }}
-            - --{{ $key }}
-            {{- end }}
-            {{- end }}
+          {{- range $key, $value := .Values.scaphandre.args }}
+          {{- if $value }}
+          - --{{ $key }}={{ $value }}
+          {{- else }}
+          - --{{ $key }}
+          {{- end }}
+          {{- end }}
+          - {{ .Values.scaphandre.command }}
+          {{- range $key, $value := .Values.scaphandre.extraArgs }}
+          {{- if $value }}
+          - --{{ $key }}={{ $value }}
+          {{- else }}
+          - --{{ $key }}
+          {{- end }}
+          {{- end }}
         env:
         {{- if .Values.scaphandre.rustBacktrace }}
         - name: RUST_BACKTRACE
@@ -49,15 +49,19 @@ spec:
         - mountPath: /proc
           name: proc
           readOnly: false
-        - mountPath: /var/scaphandre
+        - mountPath: /sys/class/powercap
           name: powercap
           readOnly: false
-      securityContext:
-        runAsUser: {{ .Values.userID }}
-        runAsGroup: {{ .Values.userGroup }}
+        securityContext:  
+          privileged: true
+          runAsUser: 0
+          runAsGroup: 0
+          allowPrivilegeEscalation: true
+          capabilities:
+            add:
+            - ALL
       serviceAccountName: {{ template "scaphandre.name" . }}
       tolerations:
-      # Tolerate all taints for observability
       - operator: "Exists"
       volumes:
       - hostPath:
@@ -65,6 +69,7 @@ spec:
           type: "Directory"
         name: proc
       - hostPath:
-          path: /var/scaphandre
+          path: /sys/class/powercap
           type: "Directory"
         name: powercap
+
