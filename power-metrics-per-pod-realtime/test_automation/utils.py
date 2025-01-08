@@ -516,6 +516,60 @@ def collect_metrics(duration, save_file_path, prometheus_url, mode, pod_name_cpu
         json.dump(metrics_over_time, f)
 
 
+def collect_metrics_with_stop_event(save_file_path, prometheus_url, mode, pod_name_cpu_metrics, stop_event):
+    """
+    Collect metrics continuously until a stop event is triggered.
+    
+    Args:
+        save_file_path (str): Path to save the collected metrics.
+        prometheus_url (str): Prometheus server URL.
+        mode (str): Mode of metrics collection ('cpu', 'energy', or 'host_energy').
+        pod_name_cpu_metrics (str): Pod name for CPU metrics.
+        stop_event (threading.Event): Event to signal stopping the collection.
+    """
+    metrics_over_time = {}
+    
+    try:
+        # Define the Prometheus query based on the mode
+        if mode == "cpu":
+            query = (
+                f'100 * (sum(rate(container_cpu_usage_seconds_total{{pod="{pod_name_cpu_metrics}"}}[5s])) by (pod) '
+                f'/ sum(kube_pod_container_resource_limits{{pod="{pod_name_cpu_metrics}", resource="cpu"}}) by (pod))'
+            )
+        elif mode == "energy":
+            query = 'sum(scaph_process_power_consumption_microwatts{container_scheduler="docker"} / 1000000) by (container_id)'
+        elif mode == "host_energy":
+            query = 'scaph_host_power_microwatts / 1000000 > 0.001'
+        else:
+            print(f"Invalid mode: {mode}")
+            return
+
+        # Continuous collection loop
+        while not stop_event.is_set():
+            try:
+                # Fetch metrics based on the mode
+                if mode == "cpu":
+                    metrics = fetch_cpu_metrics(prometheus_url, query, pod_name_cpu_metrics)
+                elif mode in {"energy", "host_energy"}:
+                    metrics = fetch_energy_metrics(prometheus_url, query)
+
+                # Collect the metrics over time
+                for id, data_points in metrics.items():
+                    if id not in metrics_over_time:
+                        metrics_over_time[id] = []
+                    metrics_over_time[id].extend(data_points)
+
+                time.sleep(1)  # Polling interval
+            except Exception as e:
+                print(f"Error collecting metrics: {e}")
+                time.sleep(5)  # Retry after a delay if an error occurs
+
+    finally:
+        # Save collected metrics to a file
+        with open(save_file_path, "w") as f:
+            json.dump(metrics_over_time, f)
+        print(f"Metrics saved to {save_file_path}")
+
 
 def generate_experiment_dir(mb, duration, packet_length, description):
     """
