@@ -216,12 +216,7 @@ def run_iperf_tcp(pod_name, namespace, mode, log_dir,duration=None,ip_address=No
         print(f"An unexpected error occurred: {e}")
 
 
-
-def run_iperf_tcp_number_packets(pod_name, namespace, mode, log_dir,duration=None,ip_address=None, mb=None, packet_length=None):
-    """
-    -n, --num n[KM] 	The number of buffers to transmit. Normally, iPerf sends for 10 seconds. The -n option overrides this and sends an array of len bytes num times, no matter how long that takes. See also the -l, -k and -t options.
-    """
-   
+def run_iperf_tcp_number_packets(pod_name, namespace, mode, log_dir, ip_address=None, mb=None, packet_length=None):
     # Set up log file path and header
     mode_suffix = 'client' if mode == 'client' else 'server'
     log_file = f"{log_dir}/log_iperf_{mode_suffix}_{pod_name}"
