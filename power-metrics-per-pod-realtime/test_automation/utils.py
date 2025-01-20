@@ -255,7 +255,7 @@ def run_iperf_tcp_number_packets(pod_name, namespace, mode, log_dir, ip_address=
         # Open the log file in append mode
         with open(log_file, 'a') as f:
             # Run the iperf command, redirecting stderr to /dev/null
-            subprocess.run(iperf_command, stdout=f, stderr=f, check=True, timeout=100000)
+            subprocess.run(iperf_command, stdout=f, stderr=f, check=True, timeout=800)
 
         print(f"Log file saved to: {log_file}")
 
