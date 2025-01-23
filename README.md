@@ -39,17 +39,15 @@ Install Prometheus
 cd ~/Dynamic-Scaling-Policy-Energy-5G-ORAN/prometheus-grafana/charts
 helm install prometheus prometheus --set alertmanager.persistentVolume.enabled=false --set server.persistentVolume.enabled=false
 ```
-## DOC TO BE FIXED  
 Create a Grafana dashboard configuration for Scaphandre
 ```bash
 kubectl create configmap scaphandre-dashboard \
-    --from-file=scaphandre-dashboard.json=~/Dynamic-Scaling-Policy-Energy-5G-ORAN/scaphandre-kubernetes/scaphandre/
+    --from-file=~/Dynamic-Scaling-Policy-Energy-5G-ORAN/prometheus-grafana/charts/grafana/dashboards/custom-dashboard.json
 ```
 Install Grafana
 ```bash
 helm install grafana grafana --values ~/Dynamic-Scaling-Policy-Energy-5G-ORAN/scaphandre-kubernetes/scaphandre/docs_src/tutorials/grafana-helm-values.yaml
 ```
-##
 
 ## 3. Set Up Power Consumption App
 ```bash
