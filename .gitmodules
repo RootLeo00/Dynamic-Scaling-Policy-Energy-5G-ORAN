@@ -1,0 +1,3 @@
+[submodule "bp3-reference-implementation"]
+	path = bp3-reference-implementation
+	url = https://github.com/RootLeo00/bp3-reference-implementation.git
