@@ -21,10 +21,9 @@ def run(data_volume_list, num_cus, ue_pod_names, upf_pod_names, prometheus_url, 
         server_threads = []
         client_threads = []
         
-        upf_pod_name=upf_pod_names[0] # although you could pass a list of upfs in the main args, we consider only one upf in our experiments
+        upf_pod_name=upf_pod_names[0][0] # although you could pass a list of upfs in the main args, we consider only one upf in our experiments
         for i,ue_pod_name in enumerate(ue_pod_names):
             ue_pod_name=ue_pod_name[0]
-            upf_pod_name=upf_pod_name[0]
             server_threads.append(Thread(target=run_iperf_tcp_number_packets, args=(ue_pod_name, ran_namespace, "server", experiment_dir, f"12.1.1.10{i}", data, packet_length)))
             client_threads.append(Thread(target=run_iperf_tcp_number_packets, args=(upf_pod_name, core_namespace, "client", experiment_dir, f"12.1.1.10{i}", data, packet_length)))
 
