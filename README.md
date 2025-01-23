@@ -1,5 +1,3 @@
-#Power Consumption Monitoring Tool
-
 # Project Setup and Configuration
 
 This README provides step-by-step instructions to install and configure the necessary tools and dependencies for deploying a 5G network and monitoring power consumption using Scaphandre, Prometheus, and Grafana.
@@ -81,3 +79,8 @@ python3 multiple_tests_packet_energy.py
 ```
 
 
+### 4. Run multiple automated experiments with Ansible
+```bash
+sudo apt install ansible
+sudo apt install ansible-core
+```
