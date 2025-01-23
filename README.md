@@ -62,23 +62,37 @@ Deploy with old fashion kubectl:
 kubectl apply -f kubernetes/deployment.yaml
 ```
 
-### 4. Run multiple automated experiments
-BP v3 deployment + iperf experiments can be run in an automated python script:
+### 4. Run multiple automated experiments with Ansible
+BP v3 deployment + iperf experiments can be run in an automated Ansible+Python script.
+Preconfiguration: creation of secrets file (Ansible vaults)
+
+To create the file and vault it, use the following command:
+```bash
+cd ~/Dynamic-Scaling-Policy-Energy-5G-ORAN/power-metrics-per-pod-realtime/
+EDITOR=vim ansible-vault create secrets.yaml
+```
+In this secret file you have to define
+```yaml
+secrets:
+  prometheus_basic_auth_password: REDACTED
+  grafana_password: REDACTED
+```
+This will create the encrypted file `secrets.yml` that we can use later to
+access to critical data.
+
+To run the experiments 
+```bash
+docker build -t deployment_node -f Dockerfile .
+sudo docker run --rm -it -v "$(pwd)":/blueprint -v ${HOME}/.ssh/id_rsa:/id_rsa deployment_node
+ansible-playbook -i inventories/staging --extra-vars "@params.yaml" --extra-vars "@params.5g.yaml" --extra-vars "@secrets.yaml" --ask-vault-pass run_tests.yaml
+```
+
+### 4. Run single experiments for one single type of scaling
+Under `Dynamic-Scaling-Policy-Energy-5G-ORAN/single_tests` there are several python scripts.
 ```bash
 cd ~/Dynamic-Scaling-Policy-Energy-5G-ORAN/power-metrics-per-pod-realtime/
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
-```
-run the experiment, as an example:
-```bash
-cd ~/Dynamic-Scaling-Policy-Energy-5G-ORAN/power-metrics-per-pod-realtime/test_automation
-python3 multiple_tests_packet_energy.py 
-```
-
-
-### 4. Run multiple automated experiments with Ansible
-```bash
-sudo apt install ansible
-sudo apt install ansible-core
+python3 multiple_tests_packet_energy_4UE_4CU_tcp_iperf-n.py # change this to the configuration you want to test
 ```
